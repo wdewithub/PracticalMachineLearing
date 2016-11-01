@@ -1,0 +1,44 @@
+---
+title: "PracticalMachineLearning_Assignment"
+author: "wdewit"
+date: "November 1, 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r change working data, include=FALSE}
+setwd(dir='c:/Users/ntpuser3/datascience/PracticalMachineLearing')
+library(caret)
+```
+
+#Executive Summary 
+
+Six participants wearing accelerometers on the belt, forearm, arm and dumbell were asked to perform barbell lifting in 5 different ways: 1 correct way and 4 common mistakes: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E).
+Each exercise was repeated 10 times. In this paper we try to find a set of variables predicting in which of the 6 ways they performed the exercise. 
+
+
+#Data Exploration
+
+The training dataset contains 19 622 observations on 160 variables. We start in first deleting the variables which have too little variation to explain anything on how well the participants performed the exercise. We also removed the row index variable at the beginning of the file and the timestamp variables. In doing so we kept 95 variables available for predicting the manner in which the participant did the exercise, recorded in the classe variable.  
+
+```{r read and first view on data}
+training <- read.csv(file="pml-training.csv", header=TRUE)
+dim(training)
+nsv <- nearZeroVar(training, saveMetrics=TRUE)
+useful_metrics <- nsv$nzv==FALSE
+useful_metrics_names <- names(training[useful_metrics])
+training_lim <- training[,useful_metrics_names]
+training_lim2 <- training_lim[,-c(1,3:6)]
+dim(training_lim2)
+rm(training, training_lim, nsv)
+```
+
+Next we will first perform a clustering analysis to get a feeling how well we will be able to predict the classe variable.
+```{r cluster analysis}
+
+Bekijk hier terug de videos van data exploration class !!!!
+
+```
