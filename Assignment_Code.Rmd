@@ -22,7 +22,7 @@ Each exercise was repeated 10 times. In this paper we try to find a set of varia
 
 #Data Exploration
 
-The training dataset contains 19 622 observations on 160 variables. We start in first deleting the variables which have too little variation to explain anything on how well the participants performed the exercise. We also removed the row index variable at the beginning of the file and the timestamp variables. In doing so we kept 95 variables available for predicting the manner in which the participant did the exercise, recorded in the classe variable.  
+The training dataset contains 19 622 observations on 160 variables. We start in first deleting the variables which have too little variation to explain anything on how well the participants performed the exercise. We also removed the row index variable at the beginning of the file and the timestamp variables.Finally, we removed the variables which only had values for a couple of observations. In doing so we kept 54 variables available for predicting the manner in which the participant did the exercise, recorded in the classe variable.  
 
 ```{r read and first view on data}
 training <- read.csv(file="pml-training.csv", header=TRUE)
@@ -31,14 +31,41 @@ nsv <- nearZeroVar(training, saveMetrics=TRUE)
 useful_metrics <- nsv$nzv==FALSE
 useful_metrics_names <- names(training[useful_metrics])
 training_lim <- training[,useful_metrics_names]
+rm(useful_metrics, useful_metrics_names)
 training_lim2 <- training_lim[,-c(1,3:6)]
-dim(training_lim2)
-rm(training, training_lim, nsv)
+check_missing <- function(x) {sum(is.na(x))}
+mvalue_count <- apply(training_lim2,2,check_missing)
+useful_metric_names <- names(mvalue_count[mvalue_count==0])
+training_lim3 <- training_lim2[,useful_metric_names]
+dim(training_lim3)
+rm(training, training_lim, training_lim2, nsv, useful_metric_names)
 ```
 
-Next we will first perform a clustering analysis to get a feeling how well we will be able to predict the classe variable.
+Next we will first perform a clustering analysis to get a feeling how well we will be able to predict the classe variable. We choose k-means since the number of observations is nearly 20K which would require quite some memory to calculate the distances between observations when taking hierarchical clustering. However, even with 100 random starts k-means does not seem to separate classes well. 
+
 ```{r cluster analysis}
+kClust <- kmeans(training_lim3[,2:53],centers=5, nstart=100)
+table(kClust$cluster,training_lim3$classe)
+```
 
-Bekijk hier terug de videos van data exploration class !!!!
+Therefore we perform a singular value decomposition and plot the first left singular value with different colours by the classe variable. We see that the 5 classes are pretty neatly separated. So, we should be able to find a predictive model.In checking which variables load highly on the first right singular value or principal component (abs value > 0.2), we find 6 variables being responsible. So, they should appear as significant predictors in our final model. However, given that the first principal component only explains 16% of the variability in our dataset we could expect quite some more predictors to be important.
+
+```{r singular value decomp}
+svdecomp <- svd(scale(training_lim3[,2:53]))
+par(mfrow=c(1,2))
+plot(svdecomp$u[,1],col=training_lim3$classe)
+plot(svdecomp$v[,1])
+impvar <- abs(svdecomp$v[,1]) > 0.2
+names(training_lim3[,2:53])[impvar]
+pca <- prcomp(scale(training_lim3[,2:53]))
+summary(pca)
+```
+
+#Formal modelling
+Since we have 54 variables to evaluate on their predictive power we choose to work with a random forest which will sample both the observations and the variables and build different decision trees. 
+
+<Leg nog beter uit, maar bekijk eerst terug de video en let ook op op cross validation>
+```{r random forest}
 
 ```
+
