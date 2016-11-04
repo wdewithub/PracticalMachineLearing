@@ -10,19 +10,18 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ```{r change working data, include=FALSE}
-setwd(dir='c:/Users/ntpuser3/datascience/PracticalMachineLearing')
+setwd(dir='C:/Users/Wendy/DataScience/PracticalMachineLearing/PracticalMachineLearing')
 library(caret)
 ```
 
 #Executive Summary 
 
 Six participants wearing accelerometers on the belt, forearm, arm and dumbell were asked to perform barbell lifting in 5 different ways: 1 correct way and 4 common mistakes: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E).
-Each exercise was repeated 10 times. In this paper we try to find a set of variables predicting in which of the 6 ways they performed the exercise. 
-
+Each exercise was repeated 10 times. In this paper we try to find a set of variables predicting in which of the 6 ways they performed the exercise. Since the focus was on accurate prediction we fitted a random forest on 52 inputvariables. We were able to obtain a very high accuracy (> 99%).
 
 #Data Exploration
 
-The training dataset contains 19 622 observations on 160 variables. We start in first deleting the variables which have too little variation to explain anything on how well the participants performed the exercise. We also removed the row index variable at the beginning of the file and the timestamp variables.Finally, we removed the variables which only had values for a couple of observations. In doing so we kept 54 variables available for predicting the manner in which the participant did the exercise, recorded in the classe variable.  
+The training dataset contains 19 622 observations on 160 variables. We start in first deleting the variables which have too little variation to explain anything on how well the participants performed the exercise. We also removed the row index variable at the beginning of the file and the timestamp variables. Finally, we removed the variables which only had values for a couple of observations. In doing so we kept 52 variables available for predicting the manner in which the participant did the exercise, recorded in the classe variable.  
 
 ```{r read and first view on data}
 training <- read.csv(file="pml-training.csv", header=TRUE)
@@ -62,15 +61,24 @@ summary(pca)
 ```
 
 #Formal modelling
-Since we have 54 variables to evaluate on their predictive power we choose to work with a random forest which will create several bootstrap samples from our observations and sample during model building the variables, leading to a diverse set of decision trees being generated. In order to reduce overfitting we will combine random forest with a 5-fold cross-validation.  
 
+Since we have 52 variables to evaluate on their predictive power we choose to work with a random forest which will create several bootstrap samples from our observations and sample during model building the variables, leading to a diverse set of decision trees being generated. In order to reduce overfitting we will combine random forest with a 3-fold cross-validation. With 52 inputvariables the default number of variables sampled at each split is floor(sqrt(52)) or 7. We will perform a grid search first to see whether any of the values between 4 and 14 produces a better accuracy. The highest accuracy is attained by randomly sampling 10 variables as candidates for each decision tree split. We continue using the random forest with mtyr=10 as the final model. The out of sample error rate is estimated at 1-0.9941=0.59%.
 
-```{r random forest}
+```{r random forest, cache=TRUE}
 library(e1071)
-modfit <- train(classe ~ . - user_name, training_lim3, method="rf", trControl=trainControl(method="cv", number=5),prox=TRUE, allowparallell=TRUE)
-
+set.seed(1384)
+tunegrid <- expand.grid(.mtry=c(4:14))
+modfit_mtyrsearch <- train(classe ~ . - user_name, training_lim3, method="rf", trControl=trainControl(method="cv", number=3),prox=TRUE, allowparallell=TRUE,tuneGrid=tunegrid)
+print(modfit_mtyrsearch)
+plot(modfit_mtyrsearch)
+saveRDS(modfit_mtyrsearch$finalModel, "./final_model.rds")
 ```
-Rode laptop heeft onvoldoende geheugen voor rf fitting
 
-Eventueel hierboven ook eerstzoeken naar optimale mtyr en dan rf fitten met die mtyr:
-zie http://machinelearningmastery.com/tune-machine-learning-algorithms-in-r/
+Finally, we want to have a quick look which of our 52 variables are most important in predicting the Classe variable. We notice that 7 variables are very helpful in predicting the classe variable. From magnet_dumbbell_y onwards the importance drops with one third already. If a parsimonious model was important one might consider to fit a logistic regression model solely with those 7 predictors. However, as we focus on prediction accuracy we conclude our exercise with the random forest approach. 
+
+```{r variable importance}
+ varimp_raw <- varImp(modfit_mtyrsearch$finalModel)
+ varimp <- varimp_raw[order(varimp_raw[,1],decreasing=TRUE),, drop=FALSE]
+ barplot(varimp$Overall)
+```
+
