@@ -62,10 +62,15 @@ summary(pca)
 ```
 
 #Formal modelling
-Since we have 54 variables to evaluate on their predictive power we choose to work with a random forest which will sample both the observations and the variables and build different decision trees. 
+Since we have 54 variables to evaluate on their predictive power we choose to work with a random forest which will create several bootstrap samples from our observations and sample during model building the variables, leading to a diverse set of decision trees being generated. In order to reduce overfitting we will combine random forest with a 5-fold cross-validation.  
 
-<Leg nog beter uit, maar bekijk eerst terug de video en let ook op op cross validation>
+
 ```{r random forest}
+library(e1071)
+modfit <- train(classe ~ . - user_name, training_lim3, method="rf", trControl=trainControl(method="cv", number=5),prox=TRUE, allowparallell=TRUE)
 
 ```
+Rode laptop heeft onvoldoende geheugen voor rf fitting
 
+Eventueel hierboven ook eerstzoeken naar optimale mtyr en dan rf fitten met die mtyr:
+zie http://machinelearningmastery.com/tune-machine-learning-algorithms-in-r/
