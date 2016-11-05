@@ -16,8 +16,9 @@ library(caret)
 
 #Executive Summary 
 
-Six participants wearing accelerometers on the belt, forearm, arm and dumbell were asked to perform barbell lifting in 5 different ways: 1 correct way and 4 common mistakes: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E).
-Each exercise was repeated 10 times. In this paper we try to find a set of variables predicting in which of the 6 ways they performed the exercise. Since the focus was on accurate prediction we fitted a random forest on 52 inputvariables. We were able to obtain a very high accuracy (> 99%).
+Six participants wearing accelerometers on the belt, forearm, arm and dumbell were asked to perform barbell lifting in 5 different ways: 1 correct way and 4 common mistakes: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E). Each exercise was repeated 10 times.
+
+In this paper we try to find a set of variables predicting in which of the 5 ways they performed the exercise. Since the focus was on accurate prediction we fitted a random forest. We first determined the optimal number or variables to evaluate at each split. Next we focussed our efforts in building a less complex tree, both to improve calculation speed and to reduce the risk of overfitting. Our final random forest included 19 input variables, which promised us a good out of sample accuracy based on 3-fold cross-validation (accuracy =95.6%).
 
 #Data Exploration
 
@@ -62,23 +63,53 @@ summary(pca)
 
 #Formal modelling
 
-Since we have 52 variables to evaluate on their predictive power we choose to work with a random forest which will create several bootstrap samples from our observations and sample during model building the variables, leading to a diverse set of decision trees being generated. In order to reduce overfitting we will combine random forest with a 3-fold cross-validation. With 52 inputvariables the default number of variables sampled at each split is floor(sqrt(52)) or 7. We will perform a grid search first to see whether any of the values between 4 and 14 produces a better accuracy. The highest accuracy is attained by randomly sampling 10 variables as candidates for each decision tree split. We continue using the random forest with mtyr=10 as the final model. The out of sample error rate is estimated at 1-0.9941=0.59%.
+Since we have 52 variables, likely to have many high correlations, we choose to work with a random forest which will create several bootstrap samples from our observations and sample during model building the variables, leading to a diverse set of decision trees being generated. In order to reduce overfitting we will combine random forest with a 3-fold cross-validation. 3-fold cross-validation is not a lot, but given the size of our dataset both in observations and variables to evaluate a more stringent cross-validation would lead to inacceptably high processing times. With 52 inputvariables the default number of variables sampled at each split is floor(sqrt(52)) or 7. We will perform a grid search first to see whether any of the values between 4 and 14 produces a better accuracy. The highest accuracy is attained by randomly sampling 10 variables as candidates for each decision tree split. The out of sample error rate is estimated at 1-0.9941=0.59%.
 
-```{r random forest, cache=TRUE}
+```{r random forest, eval=FALSE}
 library(e1071)
 set.seed(1384)
 tunegrid <- expand.grid(.mtry=c(4:14))
-modfit_mtyrsearch <- train(classe ~ . - user_name, training_lim3, method="rf", trControl=trainControl(method="cv", number=3),prox=TRUE, allowparallell=TRUE,tuneGrid=tunegrid)
+modfit_mtyrsearch <- train(classe ~ . - user_name, training_lim3, method="rf", trControl=trainControl(method="cv", number=3),prox=TRUE, allowparallell=TRUE,tuneGrid=tunegrid, nodesize=196)
 print(modfit_mtyrsearch)
 plot(modfit_mtyrsearch)
-saveRDS(modfit_mtyrsearch$finalModel, "./final_model.rds")
 ```
 
-Finally, we want to have a quick look which of our 52 variables are most important in predicting the Classe variable. We notice that 7 variables are very helpful in predicting the classe variable. From magnet_dumbbell_y onwards the importance drops with one third already. If a parsimonious model was important one might consider to fit a logistic regression model solely with those 7 predictors. However, as we focus on prediction accuracy we conclude our exercise with the random forest approach. 
+We continue using the random forest with mtyr=10. We will further avoiding overfitting in building a less deep tree in requiring that each node has at least 1% of the observations. With a 3-fold cross validation this comes down to 196/3=65. Fitting less complex trees increases the expected out of sample error rate to (1-0.9711)=2.89%, which is still very good.
+
+```{r random forest fit with mtyr 10}
+set.seed(1384)
+mtry <- 10
+tunegrid <- expand.grid(.mtry=mtry)
+modfit <- train(classe ~ . - user_name, training_lim3, method="rf", trControl=trainControl(method="cv", number=3),prox=TRUE, allowparallell=TRUE,tuneGrid=tunegrid, nodesize=65)
+print(modfit)
+saveRDS(modfit$finalModel, "./final_model.rds")
+```
+
+
+Finally, we want to have a quick look which of our 52 variables are most important in predicting the Classe variable. We notice that 7 variables are very helpful in predicting the classe variable. From magnet_dumbbell_x onwards the importance drops with one third already. We decide to refit a random forest model with all variables having an importance > 200. This keeps 19 predictors, including 4 of the 6 variables which were found important by the singular value decomposition in the exploratory phase. 
 
 ```{r variable importance}
- varimp_raw <- varImp(modfit_mtyrsearch$finalModel)
+ finalmodel <- readRDS("./final_model.rds")
+ varimp_raw <- varImp(finalmodel)
  varimp <- varimp_raw[order(varimp_raw[,1],decreasing=TRUE),, drop=FALSE]
- barplot(varimp$Overall)
+ par(mfrow=c(1,1))
+ barplot(varimp$Overall,names.arg=rownames(varimp),las=2,ylab='Variable importance')
 ```
 
+In fitting a random forest based on the 19 most important predictors found earlier, our expected out of sample accuracy further lowered to 95.6%, which is still very acceptable. 
+
+```{r more parsimonious model}
+varimp200 <- varimp>200
+varimp200_names <- c("classe",rownames(varimp)[varimp200])
+training_limfinal <- training_lim3[,varimp200_names]
+modfit_pars <- train(classe ~ . , training_limfinal, method="rf", trControl=trainControl(method="cv", number=3),prox=TRUE, allowparallell=TRUE,tuneGrid=tunegrid, nodesize=65)
+print(modfit_pars)
+saveRDS(modfit_pars$finalModel, "./final_model_pars.rds")
+```
+
+From the confusion matrix below we see that all of the classes have a high accuracy. Therefore we accept the random forest based on 19 predictors as the final model with an expected out of sample error rate of 1-95.6=4.4%
+
+```{r checking accuracy individual classes}
+predicted<- predict(modfit_pars$finalModel,training_limfinal)
+table(predicted,training_limfinal$classe)
+```
